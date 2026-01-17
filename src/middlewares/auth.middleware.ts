@@ -6,19 +6,25 @@ export const authenticate = (req: Request, res: Response, next: NextFunction) =>
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    logger.warn('Intento de acceso sin token');
-    return res.status(401).json({ message: 'No autorizado, token faltante' });
+    logger.warn(`Acceso denegado: Token faltante en ${req.originalUrl}`);
+    return res.status(401).json({ 
+      success: false, 
+      message: 'No autorizado, se requiere un token de acceso' 
+    });
   }
 
   const token = authHeader.split(' ')[1];
   const decoded = verifyToken(token);
 
-  if (!decoded) {
-    logger.warn('Token inválido o expirado');
-    return res.status(401).json({ message: 'Token inválido o expirado' });
+  if (!decoded || !decoded.id) {
+    logger.warn(`Acceso denegado: Token inválido o corrupto desde IP ${req.ip}`);
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Token inválido o expirado' 
+    });
   }
 
-  // Guardamos la info del usuario en el objeto request para usarlo luego
+  // Seteamos el usuario para que esté disponible en los controladores y en la Auditoría
   (req as any).user = decoded;
   
   next();

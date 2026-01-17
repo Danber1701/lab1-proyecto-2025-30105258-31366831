@@ -7,29 +7,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Usuario {
-  id            Int     @id @default(autoincrement())
-  username      String  @unique @db.VarChar(100)
-  email         String  @unique @db.VarChar(255)
-  passwordHash  String
-  estado        String  @default("activo") @db.VarChar(20)
-  fechaCreacion DateTime @default(now())
-  actualizadoEn DateTime @updatedAt
+// ==========================================
+// 1. SISTEMA DE USUARIOS Y ACCESOS (RBAC)
+// ==========================================
 
-  roles         UsuarioRol[]
-  bitacora      BitacoraAccesos[]
+model Usuario {
+  id            Int               @id @default(autoincrement())
+  username      String            @unique @db.VarChar(100)
+  email         String            @unique @db.VarChar(255)
+  passwordHash  String
+  estado        String            @default("activo") @db.VarChar(20)
+  fechaCreacion DateTime          @default(now())
+  actualizadoEn DateTime          @updatedAt
+
+  roles    UsuarioRol[]
+  bitacora BitacoraAccesos[]
 
   @@index([username])
   @@index([email])
 }
 
 model Rol {
-  id          Int     @id @default(autoincrement())
-  nombre      String  @unique @db.VarChar(100)
-  descripcion String  @db.Text
+  id          Int      @id @default(autoincrement())
+  nombre      String   @unique @db.VarChar(100)
+  descripcion String   @db.Text
 
-  usuarios  UsuarioRol[]
-  permisos  RolPermiso[]
+  usuarios UsuarioRol[]
+  permisos RolPermiso[]
 
   @@index([nombre])
 }
@@ -55,393 +59,463 @@ model Permiso {
 }
 
 model RolPermiso {
-  rolId      Int
-  permisoId  Int
-  rol        Rol     @relation(fields: [rolId], references: [id], onDelete: Cascade)
-  permiso    Permiso @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+  rolId     Int
+  permisoId Int
+  rol       Rol     @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  permiso   Permiso @relation(fields: [permisoId], references: [id], onDelete: Cascade)
 
   @@id([rolId, permisoId])
   @@index([permisoId])
 }
 
-model PersonaAtendida {
-  id                  Int       @id @default(autoincrement())
-  tipoDocumento       String    @db.VarChar(20)
-  numeroDocumento     String    @unique @db.VarChar(50)
-  nombres             String    @db.VarChar(100)
-  apellidos           String    @db.VarChar(100)
-  fechaNacimiento     DateTime
-  sexo                String    @db.VarChar(20)
-  correo              String?   @db.VarChar(255)
-  telefono            String?   @db.VarChar(20)
-  direccion           String?   @db.Text
-  contactoEmergencia  String?   @db.VarChar(200)
-  alergias            String?   @db.Text
-  estado              String    @default("activo") @db.VarChar(20)
-  fechaCreacion       DateTime  @default(now())
-  actualizadoEn       DateTime  @updatedAt
+// ==========================================
+// 2. ENTIDADES PRINCIPALES
+// ==========================================
 
-  citas               Cita[]
-  episodios           EpisodioAtencion[]
-  afiliaciones        Afiliacion[]
-  facturas            Factura[]
-  consentimientos     Consentimiento[]
+model PersonaAtendida {
+  id                 Int      @id @default(autoincrement())
+  tipoDocumento      String   @db.VarChar(20)
+  numeroDocumento    String   @unique @db.VarChar(50)
+  nombres            String   @db.VarChar(100)
+  apellidos          String   @db.VarChar(100)
+  fechaNacimiento    DateTime
+  sexo               String   @db.VarChar(20)
+  correo             String?  @db.VarChar(255)
+  telefono           String?  @db.VarChar(20)
+  direccion          String?  @db.Text
+  contactoEmergencia String?  @db.VarChar(200)
+  alergias           String?  @db.Text
+  estado             String   @default("activo") @db.VarChar(20)
+  fechaCreacion      DateTime @default(now())
+  actualizadoEn      DateTime @updatedAt
+
+  citas           Cita[]
+  episodios       EpisodioAtencion[]
+  afiliaciones    Afiliacion[]
+  facturas        Factura[]
+  consentimientos Consentimiento[]
 
   @@index([numeroDocumento])
-  @@index([estado])
 }
 
 model Profesional {
-  id                  Int     @id @default(autoincrement())
-  nombres             String  @db.VarChar(100)
-  apellidos           String  @db.VarChar(100)
-  registroProfesional String  @unique @db.VarChar(100)
-  especialidad        String  @db.VarChar(100)
-  correo              String  @unique @db.VarChar(255)
-  telefono            String  @db.VarChar(20)
-  agendaHabilitada    Boolean @default(true)
-  estado              String  @default("activo") @db.VarChar(20)
+  id                  Int      @id @default(autoincrement())
+  nombres             String   @db.VarChar(100)
+  apellidos           String   @db.VarChar(100)
+  registroProfesional String   @unique @db.VarChar(100)
+  especialidad        String   @db.VarChar(100)
+  correo              String   @unique @db.VarChar(255)
+  telefono            String   @db.VarChar(20)
+  agendaHabilitada    Boolean  @default(true)
+  estado              String   @default("activo") @db.VarChar(20)
   fechaCreacion       DateTime @default(now())
   actualizadoEn       DateTime @updatedAt
 
-  agendas             Agenda[]
-  citas               Cita[]
-  notasClinicas       NotaClinica[]
-  episodios           EpisodioAtencion[]
+  agendas       Agenda[]
+  citas         Cita[]
+  notasClinicas NotaClinica[]
+  episodios     EpisodioAtencion[]
 
   @@index([especialidad])
-  @@index([estado])
 }
 
 model UnidadAtencion {
-  id                  Int     @id @default(autoincrement())
-  nombre              String  @db.VarChar(200)
-  tipo                String  @db.VarChar(50)
-  direccion           String  @db.Text
-  telefono            String  @db.VarChar(20)
-  horarioReferencia   String? @db.VarChar(200)
-  estado              String  @default("activo") @db.VarChar(20)
-  fechaCreacion       DateTime @default(now())
-  actualizadoEn       DateTime @updatedAt
+  id                Int      @id @default(autoincrement())
+  nombre            String   @db.VarChar(200)
+  tipo              String   @db.VarChar(50)
+  direccion         String   @db.Text
+  telefono          String   @db.VarChar(20)
+  horarioReferencia String?  @db.VarChar(200)
+  estado            String   @default("activo") @db.VarChar(20)
+  fechaCreacion     DateTime @default(now())
+  actualizadoEn     DateTime @updatedAt
 
-  agendas             Agenda[]
-  citas               Cita[]
+  agendas Agenda[]
+  citas   Cita[]
 
   @@index([tipo])
-  @@index([estado])
 }
 
-model Agenda {
-  id                  Int     @id @default(autoincrement())
-  profesionalId       Int
-  unidadId            Int
-  inicio              DateTime
-  fin                 DateTime
-  capacidad           Int     @default(1)
-  estado              String  @default("abierto") @db.VarChar(20)
-  fechaCreacion       DateTime @default(now())
-  actualizadoEn       DateTime @updatedAt
+// ==========================================
+// 3. AGENDA Y CITAS
+// ==========================================
 
-  profesional         Profesional @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
-  unidad              UnidadAtencion @relation(fields: [unidadId], references: [id], onDelete: Cascade)
-  citas               Cita[]
+model Agenda {
+  id            Int      @id @default(autoincrement())
+  profesionalId Int
+  unidadId      Int
+  inicio        DateTime
+  fin           DateTime
+  capacidad     Int      @default(1)
+  estado        String   @default("abierto") @db.VarChar(20)
+  fechaCreacion DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  profesional Profesional    @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
+  unidad      UnidadAtencion @relation(fields: [unidadId], references: [id], onDelete: Cascade)
+  citas       Cita[]
 
   @@index([profesionalId])
   @@index([unidadId])
-  @@index([estado])
 }
 
 model Cita {
-  id                  Int     @id @default(autoincrement())
-  personaId           Int
-  profesionalId       Int
-  unidadId            Int
-  agendaId            Int?
-  inicio              DateTime
-  fin                 DateTime
-  motivo              String  @db.VarChar(500)
-  canal               String  @db.VarChar(50)
-  estado              String  @default("solicitada") @db.VarChar(50)
-  observaciones       String? @db.Text
-  fechaCreacion       DateTime @default(now())
-  actualizadoEn       DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  personaId     Int
+  profesionalId Int
+  unidadId      Int
+  agendaId      Int?
+  inicio        DateTime
+  fin           DateTime
+  motivo        String   @db.VarChar(500)
+  canal         String   @db.VarChar(50)
+  estado        String   @default("solicitada") @db.VarChar(50)
+  observaciones String?  @db.Text
+  fechaCreacion DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
 
-  persona             PersonaAtendida @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  profesional         Profesional @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
-  unidad              UnidadAtencion @relation(fields: [unidadId], references: [id], onDelete: Cascade)
-  agenda              Agenda? @relation(fields: [agendaId], references: [id], onDelete: SetNull)
+  persona     PersonaAtendida @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  profesional Profesional     @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
+  unidad      UnidadAtencion  @relation(fields: [unidadId], references: [id], onDelete: Cascade)
+  agenda      Agenda?         @relation(fields: [agendaId], references: [id], onDelete: SetNull)
 
   @@index([personaId])
   @@index([profesionalId])
-  @@index([estado])
 }
 
-model EpisodioAtencion {
-  id                  Int     @id @default(autoincrement())
-  personaId           Int
-  profesionalId       Int
-  fechaApertura       DateTime @default(now())
-  motivo              String  @db.VarChar(500)
-  tipo                String  @db.VarChar(50)
-  estado              String  @default("abierto") @db.VarChar(20)
-  actualizadoEn       DateTime @updatedAt
+// ==========================================
+// 4. REGISTRO CLÍNICO (EPISODIOS)
+// ==========================================
 
-  persona             PersonaAtendida @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  profesional         Profesional @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
+model EpisodioAtencion {
+  id            Int      @id @default(autoincrement())
+  personaId     Int
+  profesionalId Int
+  fechaApertura DateTime @default(now())
+  motivo        String   @db.VarChar(500)
+  tipo          String   @db.VarChar(50)
+  estado        String   @default("abierto") @db.VarChar(20)
+  actualizadoEn DateTime @updatedAt
+
+  persona     PersonaAtendida @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  profesional Profesional     @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
   
-  notasClinicas       NotaClinica[]
-  diagnosticos        Diagnostico[]
-  ordenes             Orden[]
-  consentimientos     Consentimiento[]
+  notasClinicas  NotaClinica[]
+  diagnosticos   Diagnostico[]
+  ordenes        Orden[]
+  consentimientos Consentimiento[]
+  prescripciones Prescripcion[]
 
   @@index([personaId])
-  @@index([estado])
 }
 
 model NotaClinica {
-  id                  Int     @id @default(autoincrement())
-  episodioId          Int
-  profesionalId       Int
-  fecha               DateTime @default(now())
-  subjetivo           String? @db.Text
-  objetivo            String? @db.Text
-  analisis            String? @db.Text
-  plan                String? @db.Text
-  version             Int     @default(1)
-  actualizadoEn       DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  episodioId    Int
+  profesionalId Int
+  fecha         DateTime @default(now())
+  subjetivo     String?  @db.Text
+  objetivo      String?  @db.Text
+  analisis      String?  @db.Text
+  plan          String?  @db.Text
+  version       Int      @default(1)
+  actualizadoEn DateTime @updatedAt
 
-  episodio            EpisodioAtencion @relation(fields: [episodioId], references: [id], onDelete: Cascade)
-  profesional         Profesional @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
+  episodio    EpisodioAtencion @relation(fields: [episodioId], references: [id], onDelete: Cascade)
+  profesional Profesional      @relation(fields: [profesionalId], references: [id], onDelete: Cascade)
 
   @@index([episodioId])
 }
 
 model Diagnostico {
-  id                  Int     @id @default(autoincrement())
-  episodioId          Int
-  codigo              String  @db.VarChar(50)
-  descripcion         String  @db.Text
-  tipo                String  @db.VarChar(50)
-  principal           Boolean @default(false)
-  fechaCreacion       DateTime @default(now())
+  id            Int      @id @default(autoincrement())
+  episodioId    Int
+  codigo        String   @db.VarChar(50)
+  descripcion   String   @db.Text
+  tipo          String   @db.VarChar(50)
+  principal     Boolean  @default(false)
+  fechaCreacion DateTime @default(now())
 
-  episodio            EpisodioAtencion @relation(fields: [episodioId], references: [id], onDelete: Cascade)
+  episodio EpisodioAtencion @relation(fields: [episodioId], references: [id], onDelete: Cascade)
 
   @@index([episodioId])
 }
 
 model Consentimiento {
-  id                  Int     @id @default(autoincrement())
-  personaId           Int
-  episodioId          Int?
-  tipoProcedimiento   String  @db.VarChar(200)
-  fecha               DateTime @default(now())
-  metodo              String  @db.VarChar(50)
-  archivoId           String? @db.VarChar(255)
+  id                Int      @id @default(autoincrement())
+  personaId         Int
+  episodioId        Int?
+  tipoProcedimiento String   @db.VarChar(200)
+  fecha             DateTime @default(now())
+  metodo            String   @db.VarChar(50)
+  archivoId         String?  @db.VarChar(255)
 
-persona             PersonaAtendida @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  episodio            EpisodioAtencion? @relation(fields: [episodioId], references: [id], onDelete: SetNull)
+  persona  PersonaAtendida  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  episodio EpisodioAtencion? @relation(fields: [episodioId], references: [id], onDelete: SetNull)
 
   @@index([personaId])
 }
 
-model Orden {
-  id                  Int     @id @default(autoincrement())
-  episodioId          Int
-  tipo                String  @db.VarChar(50)
-  prioridad           String  @default("normal") @db.VarChar(50)
-  estado              String  @default("emitida") @db.VarChar(50)
-  fechaCreacion       DateTime @default(now())
-  actualizadoEn       DateTime @updatedAt
+// ==========================================
+// 5. ÓRDENES, RESULTADOS Y PRESCRIPCIONES
+// ==========================================
 
-  episodio            EpisodioAtencion @relation(fields: [episodioId], references: [id], onDelete: Cascade)
-  items               OrdenItem[]
-  resultados          Resultado[]
+model Orden {
+  id            Int      @id @default(autoincrement())
+  episodioId    Int
+  tipo          String   @db.VarChar(50)
+  prioridad     String   @default("normal") @db.VarChar(50)
+  estado        String   @default("emitida") @db.VarChar(50)
+  fechaCreacion DateTime @default(now())
+  actualizadoEn DateTime @updatedAt
+
+  episodio     EpisodioAtencion @relation(fields: [episodioId], references: [id], onDelete: Cascade)
+  items        OrdenItem[]
+  resultados   Resultado[]
+  autorizacion Autorizacion?
 
   @@index([episodioId])
-  @@index([estado])
 }
 
 model OrdenItem {
-  id                  Int     @id @default(autoincrement())
-  ordenId             Int
-  codigo              String  @db.VarChar(100)
-  descripcion         String  @db.Text
-  indicaciones        String? @db.Text
+  id           Int     @id @default(autoincrement())
+  ordenId      Int
+  codigo       String  @db.VarChar(100)
+  descripcion  String  @db.Text
+  indicaciones String? @db.Text
 
-  orden               Orden @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  orden Orden @relation(fields: [ordenId], references: [id], onDelete: Cascade)
 
   @@index([ordenId])
 }
 
 model Resultado {
-  id                  Int     @id @default(autoincrement())
-  ordenId             Int
-  fecha               DateTime @default(now())
-  resumen             String? @db.Text
-  archivoId           String? @db.VarChar(255)
-  version             Int     @default(1)
-  actualizadoEn       DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  ordenId       Int
+  fecha         DateTime @default(now())
+  resumen       String?  @db.Text
+  archivoId     String?  @db.VarChar(255)
+  version       Int      @default(1)
+  actualizadoEn DateTime @updatedAt
 
-  orden               Orden @relation(fields: [ordenId], references: [id], onDelete: Cascade)
+  orden Orden @relation(fields: [ordenId], references: [id], onDelete: Cascade)
 
   @@index([ordenId])
 }
 
-model Prestacion {
-  codigo              String  @id @db.VarChar(100)
-  nombre              String  @db.VarChar(255)
-  grupo               String  @db.VarChar(100)
-  requisitos          String? @db.Text
-  tiempoEstimado      Int?
-  fechaCreacion       DateTime @default(now())
+model Prescripcion {
+  id            Int                @id @default(autoincrement())
+  episodioId    Int
+  fecha         DateTime           @default(now())
+  observaciones String?            @db.Text
+  
+  episodio EpisodioAtencion @relation(fields: [episodioId], references: [id], onDelete: Cascade)
+  items    PrescripcionItem[]
 
-  aranceles           Arancel[]
-  facturaItems        FacturaItem[]
-
-  @@index([grupo])
+  @@index([episodioId])
 }
 
-model Aseguradora {
-  id                  Int     @id @default(autoincrement())
-  nombre              String  @db.VarChar(200)
-  nit                 String  @unique @db.VarChar(50)
-  contacto            String? @db.VarChar(200)
-  estado              String  @default("activo") @db.VarChar(20)
-  fechaCreacion       DateTime @default(now())
+model PrescripcionItem {
+  id                Int    @id @default(autoincrement())
+  prescripcionId    Int
+  medicamentoCodigo String @db.VarChar(100)
+  nombre            String @db.VarChar(255)
+  dosis             String @db.VarChar(100)
+  via               String @db.VarChar(50)
+  frecuencia        String @db.VarChar(100)
+  duracion          String @db.VarChar(100)
 
-  planes              PlanCobertura[]
-  facturas            Factura[]
+  prescripcion Prescripcion @relation(fields: [prescripcionId], references: [id], onDelete: Cascade)
+
+  @@index([prescripcionId])
+}
+
+// ==========================================
+// 6. ASEGURADORAS Y AUTORIZACIONES
+// ==========================================
+
+model Aseguradora {
+  id            Int      @id @default(autoincrement())
+  nombre        String   @db.VarChar(200)
+  nit           String   @unique @db.VarChar(50)
+  contacto      String?  @db.VarChar(200)
+  estado        String   @default("activo") @db.VarChar(20)
+  fechaCreacion DateTime @default(now())
+
+  planes   PlanCobertura[]
+  facturas Factura[]
 
   @@index([nit])
 }
 
 model PlanCobertura {
-  id                  Int     @id @default(autoincrement())
-  aseguradoraId       Int
-  nombre              String  @db.VarChar(200)
-  condicionesGenerales String? @db.Text
-  estado              String  @default("activo") @db.VarChar(20)
-  fechaCreacion       DateTime @default(now())
+  id                   Int      @id @default(autoincrement())
+  aseguradoraId        Int
+  nombre               String   @db.VarChar(200)
+  condicionesGenerales String?  @db.Text
+  estado               String   @default("activo") @db.VarChar(20)
+  fechaCreacion        DateTime @default(now())
 
-  aseguradora         Aseguradora @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
-  afiliaciones        Afiliacion[]
-  aranceles           Arancel[]
+  aseguradora    Aseguradora    @relation(fields: [aseguradoraId], references: [id], onDelete: Cascade)
+  afiliaciones   Afiliacion[]
+  aranceles      Arancel[]
+  autorizaciones Autorizacion[]
 
   @@index([aseguradoraId])
 }
 
 model Afiliacion {
-  id                  Int     @id @default(autoincrement())
-  personaId           Int
-  planId              Int
-  numeroPoliza        String  @db.VarChar(100)
-  vigenteDesde        DateTime
-  vigenteHasta        DateTime
-  copago              Decimal @db.Decimal(10, 2)
-  cuotaModeradora     Decimal @db.Decimal(10, 2)
-  estado              String  @default("activa") @db.VarChar(20)
-  fechaCreacion       DateTime @default(now())
+  id              Int      @id @default(autoincrement())
+  personaId       Int
+  planId          Int
+  numeroPoliza    String   @db.VarChar(100)
+  vigenteDesde    DateTime
+  vigenteHasta    DateTime
+  copago          Decimal  @db.Decimal(10, 2)
+  cuotaModeradora Decimal  @db.Decimal(10, 2)
+  estado          String   @default("activa") @db.VarChar(20)
+  fechaCreacion   DateTime @default(now())
 
-  persona             PersonaAtendida @relation(fields: [personaId], references: [id], onDelete: Cascade)
-  plan                PlanCobertura @relation(fields: [planId], references: [id], onDelete: Cascade)
+  persona PersonaAtendida @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  plan    PlanCobertura   @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@unique([personaId, planId])
-  @@index([numeroPoliza])
 }
 
-model Arancel {
-  id                  Int     @id @default(autoincrement())
-  prestacionCodigo    String
-  planId              Int?
-  valorBase           Decimal @db.Decimal(15, 2)
-  impuestos           Decimal @db.Decimal(10, 2) @default(0)
-  vigenteDesde        DateTime
-  vigenteHasta        DateTime
-  estado              String  @default("vigente") @db.VarChar(20)
+model Autorizacion {
+  id                 Int       @id @default(autoincrement())
+  ordenId            Int?      @unique
+  planId             Int
+  procedimientoCod   String?   @db.VarChar(100)
+  estado             String    @default("solicitada") @db.VarChar(50)
+  fechaSolicitud     DateTime  @default(now())
+  fechaRespuesta     DateTime?
+  numeroAutorizacion String?   @db.VarChar(100)
+  observaciones      String?   @db.Text
 
-prestacion          Prestacion @relation(fields: [prestacionCodigo], references: [codigo], onDelete: Cascade)
-  plan                PlanCobertura? @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan  PlanCobertura @relation(fields: [planId], references: [id])
+  orden Orden?        @relation(fields: [ordenId], references: [id])
 
   @@index([planId])
 }
 
-model Factura {
-  id                  Int     @id @default(autoincrement())
-  numero              String  @unique @db.VarChar(50)
-  fechaEmision        DateTime @default(now())
-  personaId           Int?
-  aseguradoraId       Int?
-  moneda              String  @default("COP") @db.VarChar(10)
-  subtotal            Decimal @db.Decimal(15, 2)
-  impuestos           Decimal @db.Decimal(15, 2)
-  total               Decimal @db.Decimal(15, 2)
-  estado              String  @default("emitida") @db.VarChar(50)
-  actualizadoEn       DateTime @updatedAt
+// ==========================================
+// 7. CATÁLOGO, ARANCEL Y FACTURACIÓN
+// ==========================================
 
-  persona             PersonaAtendida? @relation(fields: [personaId], references: [id], onDelete: SetNull)
-  aseguradora         Aseguradora? @relation(fields: [aseguradoraId], references: [id], onDelete: SetNull)
-  items               FacturaItem[]
-  pagos               Pago[]
+model Prestacion {
+  codigo               String  @id @db.VarChar(100)
+  nombre               String  @db.VarChar(255)
+  tipo                 String  @default("CONSULTA") @db.VarChar(50)
+  grupo                String  @db.VarChar(100)
+  requisitos           String? @db.Text
+  requiereAutorizacion Boolean @default(false)
+  tiempoEstimado       Int?
+  estado               String  @default("activo") @db.VarChar(20)
+  fechaCreacion        DateTime @default(now())
+
+  aranceles    Arancel[]
+  facturaItems FacturaItem[]
+
+  @@index([grupo])
+}
+
+model Arancel {
+  id               Int      @id @default(autoincrement())
+  prestacionCodigo String
+  planId           Int?
+  valorBase        Decimal  @db.Decimal(15, 2)
+  impuestos        Decimal  @db.Decimal(15, 2) @default(0)
+  vigenteDesde     DateTime
+  vigenteHasta     DateTime
+  estado           String   @default("vigente") @db.VarChar(20)
+
+  prestacion Prestacion     @relation(fields: [prestacionCodigo], references: [codigo], onDelete: Cascade)
+  plan       PlanCobertura? @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@index([prestacionCodigo])
+}
+
+model Factura {
+  id            Int      @id @default(autoincrement())
+  numero        String   @unique @db.VarChar(50)
+  fechaEmision  DateTime @default(now())
+  personaId     Int?
+  aseguradoraId Int?
+  moneda        String   @default("COP") @db.VarChar(10)
+  subtotal      Decimal  @db.Decimal(15, 2)
+  impuestos     Decimal  @db.Decimal(15, 2)
+  total         Decimal  @db.Decimal(15, 2)
+  estado        String   @default("emitida") @db.VarChar(50)
+  actualizadoEn DateTime @updatedAt
+
+  persona     PersonaAtendida? @relation(fields: [personaId], references: [id], onDelete: SetNull)
+  aseguradora Aseguradora?     @relation(fields: [aseguradoraId], references: [id], onDelete: SetNull)
+  items       FacturaItem[]
+  pagos       Pago[]
 
   @@index([personaId])
-  @@index([aseguradoraId])
   @@index([estado])
 }
 
 model FacturaItem {
-  id                  Int     @id @default(autoincrement())
-  facturaId           Int
-  prestacionCodigo    String
-  descripcion         String  @db.Text
-  cantidad            Int
-  valorUnitario       Decimal @db.Decimal(15, 2)
-  impuestos           Decimal @db.Decimal(15, 2)
-  total               Decimal @db.Decimal(15, 2)
+  id               Int     @id @default(autoincrement())
+  facturaId        Int
+  prestacionCodigo String
+  descripcion      String  @db.Text
+  cantidad         Int
+  valorUnitario    Decimal @db.Decimal(15, 2)
+  impuestos        Decimal @db.Decimal(15, 2)
+  total            Decimal @db.Decimal(15, 2)
 
-  factura             Factura @relation(fields: [facturaId], references: [id], onDelete: Cascade)
-  prestacion          Prestacion @relation(fields: [prestacionCodigo], references: [codigo], onDelete: Restrict)
+  factura    Factura    @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  prestacion Prestacion @relation(fields: [prestacionCodigo], references: [codigo], onDelete: Restrict)
 
   @@index([facturaId])
 }
 
 model Pago {
-  id                  Int     @id @default(autoincrement())
-  facturaId           Int
-  fecha               DateTime @default(now())
-  monto               Decimal @db.Decimal(15, 2)
-  medio               String  @db.VarChar(50)
-  referencia          String? @db.VarChar(255)
-  estado              String  @default("exitoso") @db.VarChar(50)
+  id            Int      @id @default(autoincrement())
+  facturaId     Int
+  fecha         DateTime @default(now())
+  monto         Decimal  @db.Decimal(15, 2)
+  medio         String   @db.VarChar(50)
+  referencia    String?  @db.VarChar(255)
+  estado        String   @default("exitoso") @db.VarChar(50)
 
-  factura             Factura @relation(fields: [facturaId], references: [id], onDelete: Cascade)
+  factura Factura @relation(fields: [facturaId], references: [id], onDelete: Cascade)
 
   @@index([facturaId])
 }
 
+// ==========================================
+// 8. NOTIFICACIONES Y AUDITORÍA
+// ==========================================
+
 model Notificacion {
-  id                  Int     @id @default(autoincrement())
-  tipo                String  @db.VarChar(50)
-  plantilla           String? @db.VarChar(255)
-  destinatario        String  @db.VarChar(255)
-  payload             String  @db.Text
-  estado              String  @default("enviado") @db.VarChar(50)
-  timestamp           DateTime @default(now())
-  reintentos          Int     @default(0)
+  id           Int      @id @default(autoincrement())
+  tipo         String   @db.VarChar(50)
+  plantilla    String?  @db.VarChar(255)
+  destinatario String   @db.VarChar(255)
+  payload      String   @db.Text
+  estado       String   @default("enviado") @db.VarChar(50)
+  timestamp    DateTime @default(now())
+  reintentos   Int      @default(0)
 
   @@index([estado])
 }
 
 model BitacoraAccesos {
-  id                  Int     @id @default(autoincrement())
-  usuarioId           Int?
-  recurso             String  @db.VarChar(255)
-  accion              String  @db.VarChar(50)
-  ip                  String? @db.VarChar(50)
-  userAgent           String? @db.Text
-  fecha               DateTime @default(now())
+  id        Int      @id @default(autoincrement())
+  usuarioId Int?
+  recurso   String   @db.VarChar(255)
+  accion    String   @db.VarChar(50)
+  ip        String?  @db.VarChar(50)
+  userAgent String?  @db.Text
+  fecha     DateTime @default(now())
 
-  usuario             Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@index([usuarioId])
   @@index([fecha])

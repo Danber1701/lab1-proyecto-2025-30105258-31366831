@@ -1,0 +1,50 @@
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log('🌱 Iniciando la siembra de datos (Seed)...');
+
+  // 1. Crear Permisos para Autorizaciones
+  const pCrear = await prisma.permiso.upsert({
+    where: { clave: 'AUTORIZACIONES_CREAR' },
+    update: {},
+    create: { clave: 'AUTORIZACIONES_CREAR', descripcion: 'Permite solicitar nuevas autorizaciones' },
+  });
+
+  const pAdmin = await prisma.permiso.upsert({
+    where: { clave: 'AUTORIZACIONES_ADMIN' },
+    update: {},
+    create: { clave: 'AUTORIZACIONES_ADMIN', descripcion: 'Permite aprobar o negar autorizaciones' },
+  });
+
+  // 2. Crear Rol de Administrador
+  const rolAdmin = await prisma.rol.upsert({
+    where: { nombre: 'ADMINISTRADOR' },
+    update: {},
+    create: { 
+      nombre: 'ADMINISTRADOR', 
+      descripcion: 'Acceso total al sistema médico' 
+    },
+  });
+
+  // 3. Vincular Permisos al Rol (Tabla RolPermiso)
+  // Usamos createMany y skipDuplicates para no generar errores si ya existen
+  await prisma.rolPermiso.createMany({
+    data: [
+      { rolId: rolAdmin.id, permisoId: pCrear.id },
+      { rolId: rolAdmin.id, permisoId: pAdmin.id },
+    ],
+    skipDuplicates: true,
+  });
+
+  console.log('✅ Seed finalizado: Roles y Permisos configurados.');
+}
+
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

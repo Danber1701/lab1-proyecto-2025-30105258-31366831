@@ -1,3 +1,6 @@
+import prisma from '../config/database';
+
+// --- LOGAR DE APLICACIÓN (Tu código original mantenido) ---
 const levels = {
   error: 0,
   warn: 1,
@@ -15,6 +18,25 @@ const logger = {
       console.debug(`[DEBUG] ${new Date().toISOString()}: ${message}`);
     }
   },
+};
+
+// --- AUDITOR DE BASE DE DATOS (Bitácora de Accesos) ---
+// Esta es la nueva función que guarda en la tabla de la base de datos
+export const registrarAccion = async (usuarioId: number, recurso: string, accion: string, req: any) => {
+  try {
+    await prisma.bitacoraAccesos.create({
+      data: {
+        usuarioId,
+        recurso,
+        accion,
+        ip: req.ip || req.connection.remoteAddress,
+        userAgent: req.get('user-agent') || 'Desconocido'
+      }
+    });
+  } catch (err) {
+    // Si falla la bitácora, lo logueamos en la consola para no detener la app
+    logger.error(`No se pudo guardar en la bitácora: ${err}`);
+  }
 };
 
 export default logger;

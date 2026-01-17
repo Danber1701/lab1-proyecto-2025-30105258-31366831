@@ -1,0 +1,200 @@
+openapi: 3.0.0
+info:
+  title: API Sistema Médico Integral 2026
+  version: 10.0.0
+  description: |
+    Documentación técnica completa y funcional del ecosistema médico. 
+    Esta API gestiona el ciclo de vida completo del paciente:
+    1. **Seguridad**: Registro y autenticación mediante JWT.
+    2. **Pacientes**: Gestión de datos demográficos y estados (Activos/Inactivos).
+    3. **Profesionales**: Catálogo de médicos y especialistas.
+    4. **Historia Clínica**: Episodios, evolución SOAP con versionado, diagnósticos CIE-10 y prescripciones.
+    5. **Aseguramiento**: Afiliaciones, planes y flujo de autorizaciones.
+    6. **Finanzas**: Prestaciones, aranceles, facturación, pagos y notas contables.
+servers:
+  - url: http://localhost:3000
+    description: Servidor de Desarrollo Local
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # --- SEGURIDAD ---
+    LoginSolicitud:
+      type: object
+      required: [username, password]
+      properties:
+        username: { type: string, example: "admin" }
+        password: { type: string, format: password, example: "123456" }
+
+    RegistroSolicitud:
+      type: object
+      required: [username, password, email, rol]
+      properties:
+        username: { type: string, example: "doctor_perez" }
+        email: { type: string, format: email, example: "perez@clinica.com" }
+        password: { type: string, format: password }
+        rol: { type: string, enum: [admin, profesional, recepcion], example: "profesional" }
+        profesionalId: { type: integer, description: "ID opcional si el usuario es un médico" }
+
+    # --- PERSONAS ---
+    Persona:
+      type: object
+      required: [tipoDocumento, numeroDocumento, nombres, apellidos, sexo]
+      properties:
+        tipoDocumento: { type: string, enum: [DNI, CEDULA, PASAPORTE], example: "CEDULA" }
+        numeroDocumento: { type: string, example: "10203040" }
+        nombres: { type: string, example: "Carlos" }
+        apellidos: { type: string, example: "Ruiz" }
+        fechaNacimiento: { type: string, format: date }
+        sexo: { type: string, enum: [MASCULINO, FEMENINO, OTRO], example: "MASCULINO" }
+        estado: { type: string, enum: [activo, inactivo], default: "activo" }
+
+    # --- PROFESIONALES ---
+    ProfesionalRequest:
+      type: object
+      required: [nombres, apellidos, especialidad, registroMedico]
+      properties:
+        nombres: { type: string, example: "Laura" }
+        apellidos: { type: string, example: "Gómez" }
+        especialidad: { type: string, example: "Cardiología" }
+        registroMedico: { type: string, example: "RM-55443" }
+
+paths:
+  # === MÓDULO: SEGURIDAD Y AUTENTICACIÓN ===
+  /api/auth/register:
+    post:
+      tags: [Autenticación]
+      summary: Registrar un nuevo usuario en el sistema
+      description: Crea una cuenta de acceso vinculada a un rol específico (Admin, Profesional, etc).
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistroSolicitud' }
+      responses: { 201: { description: Usuario creado exitosamente } }
+
+  /api/auth/login:
+    post:
+      tags: [Autenticación]
+      summary: Iniciar sesión y obtener Token JWT
+      description: Retorna un Access Token y los datos básicos del usuario tras validar credenciales.
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginSolicitud' }
+      responses: { 200: { description: Login exitoso } }
+
+  /api/auth/me:
+    get:
+      tags: [Autenticación]
+      summary: Obtener perfil del usuario actual
+      security: [{ bearerAuth: [] }]
+      description: Recupera la información del usuario autenticado a través del token.
+      responses: { 200: { description: Datos del perfil } }
+
+  # === MÓDULO: PACIENTES (PERSONAS) ===
+  /api/personas:
+    get:
+      tags: [Pacientes]
+      summary: Listar pacientes con filtros avanzados
+      security: [{ bearerAuth: [] }]
+      description: |
+        Permite buscar pacientes. 
+        - Use el query `estado=activo` para pacientes vigentes. 
+        - Use `estado=inactivo` para ver pacientes eliminados lógicamente.
+      parameters:
+        - name: estado
+          in: query
+          schema: { type: string, enum: [activo, inactivo] }
+          description: Filtrar por estado de actividad.
+        - name: q
+          in: query
+          schema: { type: string }
+          description: Búsqueda por nombre o número de documento.
+      responses: { 200: { description: Lista filtrada de pacientes } }
+    post:
+      tags: [Pacientes]
+      summary: Crear un nuevo paciente
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/Persona' } } }
+      responses: { 201: { description: Paciente creado } }
+
+  /api/personas/{id}:
+    delete:
+      tags: [Pacientes]
+      summary: Desactivar paciente (Borrado Lógico)
+      security: [{ bearerAuth: [] }]
+      description: Cambia el estado del paciente a 'inactivo'. No elimina los datos de la BD por integridad referencial.
+      responses: { 200: { description: Paciente desactivado } }
+
+  /api/personas/{id}/restore:
+    patch:
+      tags: [Pacientes]
+      summary: Restaurar paciente inactivo
+      security: [{ bearerAuth: [] }]
+      description: Revierte el borrado lógico, devolviendo al paciente al estado 'activo'.
+      responses: { 200: { description: Paciente restaurado } }
+
+  # === MÓDULO: PROFESIONALES ===
+  /api/profesionales:
+    get:
+      tags: [Profesionales]
+      summary: Obtener lista de profesionales de la salud
+      security: [{ bearerAuth: [] }]
+      description: Retorna el staff médico, sus especialidades y registros.
+      responses: { 200: { description: Lista de médicos } }
+    post:
+      tags: [Profesionales]
+      summary: Registrar nuevo profesional
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProfesionalRequest' } } }
+      responses: { 201: { description: Profesional registrado } }
+
+  # === MÓDULO: HISTORIA CLÍNICA ===
+  /api/episodios:
+    post:
+      tags: [Historia Clínica]
+      summary: Abrir episodio de atención médica
+      description: Valida que el paciente no tenga ya un episodio abierto. Es el paso previo a notas y diagnósticos.
+      responses: { 201: { description: Episodio abierto } }
+
+  /api/notas:
+    post:
+      tags: [Historia Clínica]
+      summary: Registrar evolución médica (SOAP)
+      description: |
+        Si el médico ya creó una nota en este episodio, esta nueva entrada se guarda automáticamente como una 'Adenda' (nueva versión).
+      responses: { 201: { description: Nota o Adenda creada } }
+
+  # === MÓDULO: ASEGURAMIENTO Y FINANZAS ===
+  /api/autorizaciones/{id}/responder:
+    patch:
+      tags: [Aseguramiento]
+      summary: Aprobar o Negar autorización médica
+      description: |
+        - Si se aprueba, es obligatorio enviar el `numeroAutorizacion`.
+        - Al responder, se estampa automáticamente la `fechaRespuesta`.
+      responses: { 200: { description: Respuesta procesada } }
+
+  /api/notas-contables:
+    post:
+      tags: [Finanzas]
+      summary: Aplicar Nota de Crédito o Débito
+      description: |
+        - **CREDITO**: Disminuye la deuda (ej. pronto pago). Si salda la factura, esta pasa a estado 'pagada'.
+        - **DEBITO**: Aumenta el saldo de la factura.
+      responses: { 201: { description: Ajuste contable aplicado } }
+
+  # === CATÁLOGO ===
+  /api/prestaciones:
+    get:
+      tags: [Catálogo]
+      summary: Consultar catálogo de servicios y medicamentos
+      description: Lista códigos CUPS/internos, indicando si requieren autorización previa.
+      responses: { 200: { description: OK } }
