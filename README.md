@@ -120,7 +120,9 @@ npm start  Ejecutar servidor
 npm run test  Ejecutar pruebas
 npx prisma studio  Administrador visual de BD
 
-📂 Estructura del Proyecto
+---
+
+### 📂 Estructura del Proyecto
 arduino
 Copiar código
 src/
@@ -132,7 +134,10 @@ src/
 ├── services/
 ├── schemas/
 └── utils/
-📡 Endpoints Principales
+
+---
+
+### 📡 Endpoints Principales
 Autenticación
 POST /api/auth/register
 
@@ -150,11 +155,16 @@ POST /api/autorizaciones/solicitar
 
 GET /api/prestaciones
 
-📚 Documentación API
+---
+
+### 📚 Documentación API
 Swagger disponible en:
 
 http://localhost:3000/api-docs
 
-📄 Licencia
+---
+
+### 📄 Licencia
 Proyecto de uso académico y educativo.
+Roberto and Oscar S.A.
 © 2026
