@@ -1,19 +1,23 @@
 openapi: 3.0.0
 info:
   title: API Sistema Médico Integral 2026
-  version: 10.0.0
+  version: 10.1.0
   description: |
-    Documentación técnica completa y funcional del ecosistema médico. 
-    Esta API gestiona el ciclo de vida completo del paciente:
-    1. **Seguridad**: Registro y autenticación mediante JWT.
-    2. **Pacientes**: Gestión de datos demográficos y estados (Activos/Inactivos).
-    3. **Profesionales**: Catálogo de médicos y especialistas.
-    4. **Historia Clínica**: Episodios, evolución SOAP con versionado, diagnósticos CIE-10 y prescripciones.
-    5. **Aseguramiento**: Afiliaciones, planes y flujo de autorizaciones.
-    6. **Finanzas**: Prestaciones, aranceles, facturación, pagos y notas contables.
+    Documentación técnica completa. Implementa rutas RESTful con soporte para paginación, filtros y ordenamiento. 
+    Cubriendo el ciclo completo: Seguridad, Agenda, Citas, Historia Clínica, Aseguramiento y Finanzas.
+
+    **Guía de Autorización:**
+    1. Obtenga el token en `/api/auth/login`.
+    2. Haga clic en **Authorize** y pegue el token (solo la cadena alfanumérica).
+
+    **Nota Técnica:** Se han sincronizado los nombres de las rutas con el archivo `personas.routes.ts` (`/archived` y `/:id/restore`).
+
 servers:
   - url: http://localhost:3000
     description: Servidor de Desarrollo Local
+
+security:
+  - bearerAuth: []
 
 components:
   securitySchemes:
@@ -22,6 +26,26 @@ components:
       scheme: bearer
       bearerFormat: JWT
 
+  parameters:
+    PaginationLimit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 10
+    PaginationOffset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        default: 0
+    SortOrder:
+      name: sort
+      in: query
+      schema:
+        type: string
+        example: "createdAt:desc"
+
   schemas:
     # --- SEGURIDAD ---
     LoginSolicitud:
@@ -29,7 +53,7 @@ components:
       required: [username, password]
       properties:
         username: { type: string, example: "admin" }
-        password: { type: string, format: password, example: "123456" }
+        password: { type: string, format: password, example: "admin123456" }
 
     RegistroSolicitud:
       type: object
@@ -37,7 +61,7 @@ components:
       properties:
         username: { type: string, example: "doctor_perez" }
         email: { type: string, format: email, example: "perez@clinica.com" }
-        password: { type: string, format: password }
+        password: { type: string, format: password, example: "securePassword123" }
         rol: { type: string, enum: [admin, profesional, recepcion], example: "profesional" }
         profesionalId: { type: integer, description: "ID opcional si el usuario es un médico" }
 
@@ -54,147 +78,736 @@ components:
         sexo: { type: string, enum: [MASCULINO, FEMENINO, OTRO], example: "MASCULINO" }
         estado: { type: string, enum: [activo, inactivo], default: "activo" }
 
-    # --- PROFESIONALES ---
-    ProfesionalRequest:
+    # --- AGENDA Y CITAS ---
+    CitaRequest:
       type: object
-      required: [nombres, apellidos, especialidad, registroMedico]
+      required: [personaId, profesionalId, fechaHora]
       properties:
-        nombres: { type: string, example: "Laura" }
-        apellidos: { type: string, example: "Gómez" }
-        especialidad: { type: string, example: "Cardiología" }
-        registroMedico: { type: string, example: "RM-55443" }
+        personaId: { type: integer, example: 1 }
+        profesionalId: { type: integer, example: 5 }
+        fechaHora: { type: string, format: date-time, example: "2026-02-15T09:00:00Z" }
+        motivo: { type: string, example: "Control post-operatorio" }
+
+    # --- CLÍNICA ---
+    NotaClinicaRequest:
+      type: object
+      required: [episodioId, contenido]
+      properties:
+        episodioId: { type: integer, example: 1 }
+        contenido: { type: string, example: "Paciente refiere mejoría tras tratamiento inicial." }
+        diagnosticoCIE10: { type: string, example: "I10X" }
+
+    OrdenMedicaRequest:
+      type: object
+      required: [episodioId, prestacionId]
+      properties:
+        episodioId: { type: integer }
+        prestacionId: { type: integer }
+        observaciones: { type: string }
+
+    # --- FINANZAS ---
+    NotaContableRequest:
+      type: object
+      required: [facturaId, tipo, monto]
+      properties:
+        facturaId: { type: integer, example: 100 }
+        tipo: { type: string, enum: [CREDITO, DEBITO], example: "CREDITO" }
+        monto: { type: number, example: 150.50 }
 
 paths:
-  # === MÓDULO: SEGURIDAD Y AUTENTICACIÓN ===
+  # --- MÓDULO: SEGURIDAD ---
   /api/auth/register:
     post:
       tags: [Autenticación]
-      summary: Registrar un nuevo usuario en el sistema
-      description: Crea una cuenta de acceso vinculada a un rol específico (Admin, Profesional, etc).
+      summary: Registrar un nuevo usuario
+      security: []
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/RegistroSolicitud' }
-      responses: { 201: { description: Usuario creado exitosamente } }
+            schema:
+              $ref: '#/components/schemas/RegistroSolicitud'
+      responses:
+        201:
+          description: Creado
 
   /api/auth/login:
     post:
       tags: [Autenticación]
-      summary: Iniciar sesión y obtener Token JWT
-      description: Retorna un Access Token y los datos básicos del usuario tras validar credenciales.
+      summary: Iniciar sesión y obtener JWT
+      security: []
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/LoginSolicitud' }
-      responses: { 200: { description: Login exitoso } }
+            schema:
+              $ref: '#/components/schemas/LoginSolicitud'
+      responses:
+        200:
+          description: OK
+        401:
+          description: Credenciales inválidas
 
-  /api/auth/me:
-    get:
+  /api/auth/refresh:
+    post:
       tags: [Autenticación]
-      summary: Obtener perfil del usuario actual
-      security: [{ bearerAuth: [] }]
-      description: Recupera la información del usuario autenticado a través del token.
-      responses: { 200: { description: Datos del perfil } }
+      summary: Refrescar sesión (Refresh Token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        200:
+          description: OK
 
-  # === MÓDULO: PACIENTES (PERSONAS) ===
+  # --- MÓDULO: USUARIOS Y ROLES ---
+  /api/usuarios:
+    get:
+      tags: [Usuarios]
+      summary: Listar usuarios del sistema
+      responses:
+        200:
+          description: OK
+
+  /api/usuarios/roles:
+    get:
+      tags: [Usuarios]
+      summary: Listar roles configurados
+      responses:
+        200:
+          description: OK
+
+  /api/usuarios/permisos:
+    get:
+      tags: [Usuarios]
+      summary: Listar catálogo de permisos
+      responses:
+        200:
+          description: OK
+
+  # --- MÓDULO: PACIENTES ---
   /api/personas:
     get:
       tags: [Pacientes]
-      summary: Listar pacientes con filtros avanzados
-      security: [{ bearerAuth: [] }]
-      description: |
-        Permite buscar pacientes. 
-        - Use el query `estado=activo` para pacientes vigentes. 
-        - Use `estado=inactivo` para ver pacientes eliminados lógicamente.
+      summary: Listar pacientes activos
       parameters:
-        - name: estado
-          in: query
-          schema: { type: string, enum: [activo, inactivo] }
-          description: Filtrar por estado de actividad.
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+        - $ref: '#/components/parameters/SortOrder'
         - name: q
           in: query
-          schema: { type: string }
-          description: Búsqueda por nombre o número de documento.
-      responses: { 200: { description: Lista filtrada de pacientes } }
+          schema:
+            type: string
+          description: Buscar por nombre o número de documento
+        - name: sexo
+          in: query
+          schema:
+            type: string
+            enum: [MASCULINO, FEMENINO, OTRO]
+          description: Filtrar por sexo
+      responses:
+        200:
+          description: OK
     post:
       tags: [Pacientes]
-      summary: Crear un nuevo paciente
-      security: [{ bearerAuth: [] }]
+      summary: Crear nuevo paciente
       requestBody:
-        content: { application/json: { schema: { $ref: '#/components/schemas/Persona' } } }
-      responses: { 201: { description: Paciente creado } }
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Persona'
+      responses:
+        201:
+          description: Creado
+
+  /api/personas/archived:
+    get:
+      tags: [Pacientes]
+      summary: Listar pacientes archivados (inactivos)
+      description: Recupera pacientes con borrado lógico. Sincronizado con endpoint /archived.
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationOffset'
+      responses:
+        200:
+          description: OK
 
   /api/personas/{id}:
     delete:
       tags: [Pacientes]
-      summary: Desactivar paciente (Borrado Lógico)
-      security: [{ bearerAuth: [] }]
-      description: Cambia el estado del paciente a 'inactivo'. No elimina los datos de la BD por integridad referencial.
-      responses: { 200: { description: Paciente desactivado } }
+      summary: Desactivar paciente (Borrado lógico)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Registro marcado como inactivo
 
   /api/personas/{id}/restore:
     patch:
       tags: [Pacientes]
-      summary: Restaurar paciente inactivo
-      security: [{ bearerAuth: [] }]
-      description: Revierte el borrado lógico, devolviendo al paciente al estado 'activo'.
-      responses: { 200: { description: Paciente restaurado } }
+      summary: Restaurar paciente (Activar)
+      description: Cambia el estado de un registro inactivo de nuevo a 'activo'.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Paciente restaurado correctamente
+        404:
+          description: ID de paciente no encontrado
 
-  # === MÓDULO: PROFESIONALES ===
+  # --- MÓDULO: PROFESIONALES ---
   /api/profesionales:
     get:
       tags: [Profesionales]
-      summary: Obtener lista de profesionales de la salud
-      security: [{ bearerAuth: [] }]
-      description: Retorna el staff médico, sus especialidades y registros.
-      responses: { 200: { description: Lista de médicos } }
+      summary: Listar profesionales de la salud
+      responses:
+        200:
+          description: OK
     post:
       tags: [Profesionales]
       summary: Registrar nuevo profesional
-      security: [{ bearerAuth: [] }]
       requestBody:
-        content: { application/json: { schema: { $ref: '#/components/schemas/ProfesionalRequest' } } }
-      responses: { 201: { description: Profesional registrado } }
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombres: { type: string }
+                apellidos: { type: string }
+                especialidad: { type: string }
+                registroMedico: { type: string }
+      responses:
+        201:
+          description: Profesional registrado
 
-  # === MÓDULO: HISTORIA CLÍNICA ===
+  # --- MÓDULO: UNIDADES ---
+  /api/unidades:
+    get:
+      tags: [Unidades]
+      summary: Listar unidades médicas / Consultorios
+      responses:
+        200:
+          description: OK
+    post:
+      tags: [Unidades]
+      summary: Crear nueva unidad médica
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre: { type: string }
+                ubicacion: { type: string }
+      responses:
+        201:
+          description: Unidad creada
+
+  # --- MÓDULO: AGENDA Y CITAS ---
+  /api/agendas:
+    get:
+      tags: [Agenda]
+      summary: Consultar disponibilidad de profesionales
+      responses:
+        200:
+          description: OK
+    post:
+      tags: [Agenda]
+      summary: Abrir bloques de disponibilidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                profesionalId: { type: integer }
+                fechaInicio: { type: string, format: date-time }
+                fechaFin: { type: string, format: date-time }
+      responses:
+        201:
+          description: Bloque creado
+    patch:
+      tags: [Agenda]
+      summary: Actualizar estado de bloque de agenda
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: { type: integer }
+                estado: { type: string, enum: [disponible, bloqueado, reservado] }
+      responses:
+        200:
+          description: Estado actualizado
+
+  /api/citas:
+    get:
+      tags: [Citas]
+      summary: Listar citas con filtros
+      parameters:
+        - name: personaId
+          in: query
+          schema: { type: integer }
+        - name: profesionalId
+          in: query
+          schema: { type: integer }
+        - name: estado
+          in: query
+          schema: { type: string, enum: [pendiente, confirmada, cancelada, completada] }
+      responses:
+        200:
+          description: OK
+    post:
+      tags: [Citas]
+      summary: Agendar nueva cita médica
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CitaRequest'
+      responses:
+        201:
+          description: Cita agendada
+    patch:
+      tags: [Citas]
+      summary: Gestión de citas (Confirmar, cancelar, reprogramar)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: { type: integer }
+                accion: { type: string, enum: [confirmar, cancelar, reprogramar] }
+                nuevaFecha: { type: string, format: date-time }
+      responses:
+        200:
+          description: Cita actualizada
+
+  # --- MÓDULO: HISTORIA CLÍNICA ---
   /api/episodios:
+    get:
+      tags: [Historia Clínica]
+      summary: Listar episodios de atención
+      responses:
+        200:
+          description: OK
     post:
       tags: [Historia Clínica]
-      summary: Abrir episodio de atención médica
-      description: Valida que el paciente no tenga ya un episodio abierto. Es el paso previo a notas y diagnósticos.
-      responses: { 201: { description: Episodio abierto } }
+      summary: Abrir episodio de atención
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [personaId, profesionalId, motivo, tipo]
+              properties:
+                personaId: { type: integer, example: 1 }
+                profesionalId: { type: integer, example: 10 }
+                motivo: { type: string, example: "Dolor abdominal agudo y náuseas" }
+                tipo:
+                  type: string
+                  enum: [CONSULTA_EXTERNA, URGENCIAS, HOSPITALIZACION]
+                  example: "CONSULTA_EXTERNA"
+      responses:
+        201:
+          description: Episodio abierto
+
+  /api/episodios/{id}:
+    get:
+      tags: [Historia Clínica]
+      summary: Obtener detalle de un episodio
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        200:
+          description: OK
+
+  /api/episodios/{id}/cerrar:
+    patch:
+      tags: [Historia Clínica]
+      summary: Cerrar episodio de atención
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        200:
+          description: Episodio cerrado
 
   /api/notas:
     post:
       tags: [Historia Clínica]
-      summary: Registrar evolución médica (SOAP)
-      description: |
-        Si el médico ya creó una nota en este episodio, esta nueva entrada se guarda automáticamente como una 'Adenda' (nueva versión).
-      responses: { 201: { description: Nota o Adenda creada } }
+      summary: Registrar evolución médica (SOAP) / Adenda
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotaClinicaRequest'
+      responses:
+        201:
+          description: Nota guardada
 
-  # === MÓDULO: ASEGURAMIENTO Y FINANZAS ===
+  /api/notas/{id}:
+    get:
+      tags: [Historia Clínica]
+      summary: Obtener detalle de una nota clínica
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        200:
+          description: OK
+
+  /api/notas/episodio/{episodioId}:
+    get:
+      tags: [Historia Clínica]
+      summary: Listar todas las notas de un episodio
+      parameters:
+        - name: episodioId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        200:
+          description: OK
+
+  /api/ordenes:
+    get:
+      tags: [Historia Clínica]
+      summary: Listar órdenes médicas
+      responses:
+        200:
+          description: OK
+    post:
+      tags: [Historia Clínica]
+      summary: Generar orden médica (Exámenes/Procedimientos)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrdenMedicaRequest'
+      responses:
+        201:
+          description: Orden generada
+
+  /api/diagnosticos:
+    post:
+      tags: [Historia Clínica]
+      summary: Registrar diagnóstico
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                episodioId: { type: integer }
+                codigoCIE10: { type: string }
+                descripcion: { type: string }
+      responses:
+        201:
+          description: Diagnóstico registrado
+
+  /api/consentimientos:
+    post:
+      tags: [Historia Clínica]
+      summary: Registrar consentimiento informado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                personaId: { type: integer }
+                tipoProcedimiento: { type: string }
+                firmado: { type: boolean }
+      responses:
+        201:
+          description: Consentimiento registrado
+
+  /api/prescripciones:
+    post:
+      tags: [Historia Clínica]
+      summary: Crear prescripción médica / Receta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                episodioId: { type: integer }
+                medicamento: { type: string }
+                posologia: { type: string }
+      responses:
+        201:
+          description: Prescripción creada
+
+  /api/prescripciones/episodio/{episodioId}:
+    get:
+      tags: [Historia Clínica]
+      summary: Listar prescripciones de un episodio
+      parameters:
+        - name: episodioId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        200:
+          description: OK
+
+  # --- MÓDULO: ASEGURAMIENTO ---
+  /api/aseguradoras:
+    get:
+      tags: [Aseguramiento]
+      summary: Listar EPS / Aseguradoras
+      responses:
+        200:
+          description: OK
+
+  /api/planes:
+    post:
+      tags: [Aseguramiento]
+      summary: Crear nuevo plan de salud
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                aseguradoraId: { type: integer }
+                nombrePlan: { type: string }
+                cobertura: { type: string }
+      responses:
+        201:
+          description: Plan creado
+
+  /api/afiliaciones:
+    post:
+      tags: [Aseguramiento]
+      summary: Registrar afiliación de paciente a plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                personaId: { type: integer }
+                planId: { type: integer }
+                fechaInicio: { type: string, format: date }
+      responses:
+        201:
+          description: Afiliación registrada
+
   /api/autorizaciones/{id}/responder:
     patch:
       tags: [Aseguramiento]
-      summary: Aprobar o Negar autorización médica
-      description: |
-        - Si se aprueba, es obligatorio enviar el `numeroAutorizacion`.
-        - Al responder, se estampa automáticamente la `fechaRespuesta`.
-      responses: { 200: { description: Respuesta procesada } }
+      summary: Responder a solicitud de autorización
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [APROBADA, NEGADA] }
+                numeroAutorizacion: { type: string }
+                motivo: { type: string }
+      responses:
+        200:
+          description: Procesado
+
+  # --- MÓDULO: FINANZAS ---
+  /api/facturas:
+    get:
+      tags: [Finanzas]
+      summary: Consultar historial de facturación
+      parameters:
+        - $ref: '#/components/parameters/PaginationLimit'
+      responses:
+        200:
+          description: OK
+    post:
+      tags: [Finanzas]
+      summary: Generar liquidación de servicios
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [episodioId]
+              properties:
+                episodioId: { type: integer }
+      responses:
+        201:
+          description: Factura generada
+
+  /api/facturas/{id}:
+    get:
+      tags: [Finanzas]
+      summary: Obtener detalle de factura
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        200:
+          description: OK
+
+  /api/facturas/items:
+    get:
+      tags: [Finanzas]
+      summary: Listar ítems facturables por detalle
+      responses:
+        200:
+          description: OK
+
+  /api/facturas/pagos:
+    post:
+      tags: [Finanzas]
+      summary: Registrar pago de factura
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                facturaId: { type: integer }
+                monto: { type: number }
+                metodoPago: { type: string }
+      responses:
+        201:
+          description: Pago registrado
 
   /api/notas-contables:
     post:
       tags: [Finanzas]
-      summary: Aplicar Nota de Crédito o Débito
-      description: |
-        - **CREDITO**: Disminuye la deuda (ej. pronto pago). Si salda la factura, esta pasa a estado 'pagada'.
-        - **DEBITO**: Aumenta el saldo de la factura.
-      responses: { 201: { description: Ajuste contable aplicado } }
+      summary: Aplicar Nota de Crédito/Débito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotaContableRequest'
+      responses:
+        201:
+          description: Ajuste aplicado
 
-  # === CATÁLOGO ===
+  # --- CATÁLOGOS ---
   /api/prestaciones:
     get:
       tags: [Catálogo]
-      summary: Consultar catálogo de servicios y medicamentos
-      description: Lista códigos CUPS/internos, indicando si requieren autorización previa.
-      responses: { 200: { description: OK } }
+      summary: Consultar catálogo de servicios (CUPS)
+      responses:
+        200:
+          description: OK
+    post:
+      tags: [Catálogo]
+      summary: Crear nueva prestación en catálogo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                codigo: { type: string }
+                nombre: { type: string }
+                requiereAutorizacion: { type: boolean }
+      responses:
+        201:
+          description: Prestación creada
+
+  /api/aranceles:
+    get:
+      tags: [Catálogo]
+      summary: Consultar tarifas y precios vigentes
+      responses:
+        200:
+          description: OK
+    post:
+      tags: [Catálogo]
+      summary: Registrar nueva tarifa / arancel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                prestacionId: { type: integer }
+                valor: { type: number }
+                moneda: { type: string, default: "USD" }
+      responses:
+        201:
+          description: Arancel registrado
+
+  # --- NOTIFICACIONES ---
+  /api/notificaciones:
+    post:
+      tags: [Notificaciones]
+      summary: Enviar notificación manual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                personaId: { type: integer }
+                mensaje: { type: string }
+                canal: { type: string, enum: [email, sms, push] }
+      responses:
+        201:
+          description: Notificación enviada
+
+  /api/notificaciones/historial:
+    get:
+      tags: [Notificaciones]
+      summary: Consultar historial de notificaciones enviadas
+      responses:
+        200:
+          description: OK

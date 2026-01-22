@@ -26,3 +26,18 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     next(error);
   }
 };
+
+export const refresh = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) throw new Error('Refresh token es requerido');
+    
+    const result = await authService.refresh(refreshToken);
+    return sendSuccess(res, {
+      message: 'Token refrescado exitosamente',
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
