@@ -22,6 +22,11 @@ router.post(
   authController.login
 );
 
+router.post(
+  '/refresh', 
+  authController.refresh
+);
+
 // --- Rutas Protegidas (Solo accesibles con un Token válido) ---
 // Usamos el middleware 'authenticate' antes de la función final
 router.get('/profile', authenticate, (req, res) => {

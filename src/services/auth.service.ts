@@ -1,6 +1,6 @@
 import * as authRepository from '../repositories/auth.repository';
 import { hashData, compareData } from '../utils/hash';
-import { generateToken } from '../config/jwt';
+import { generateToken, verifyToken } from '../config/jwt';
 import { BadRequestError, UnauthorizedError } from '../utils/errors';
 
 export const register = async (userData: any) => {
@@ -29,22 +29,25 @@ export const register = async (userData: any) => {
 };
 
 export const login = async (credentials: any) => {
-  // Buscamos al usuario por su username
   const user = await authRepository.findUserByUsername(credentials.username);
   
   if (!user || !(await compareData(credentials.password, user.passwordHash))) {
     throw new UnauthorizedError('Credenciales incorrectas');
   }
 
-  // Mapeamos los roles a un array de strings para el JWT
   const rolesArray = user.roles.map((ur: any) => ur.rol.nombre);
 
-  // Pasamos los roles al token
-  const token = generateToken({ 
+  // Generamos el Access Token (Corta duración, ej: 1h)
+  const accessToken = generateToken({ 
     id: user.id, 
     email: user.email, 
     roles: rolesArray 
-  });
+  }, '1h');
+
+  // Generamos el Refresh Token (Larga duración, ej: 7d)
+  const refreshToken = generateToken({ 
+    id: user.id 
+  }, '7d');
 
   return {
     user: {
@@ -53,6 +56,28 @@ export const login = async (credentials: any) => {
       email: user.email,
       roles: rolesArray
     },
-    token,
+    token: accessToken,
+    refreshToken: refreshToken // Añadimos esto para el Swagger
   };
+};
+
+export const refresh = async (token: string) => {
+  try {
+    const decoded = verifyToken(token) as any;
+    const user = await authRepository.findUserById(decoded.id); // Necesitaremos esta función en el repo
+
+    if (!user) throw new UnauthorizedError('Usuario no encontrado');
+
+    const rolesArray = user.roles.map((ur: any) => ur.rol.nombre);
+    
+    const newAccessToken = generateToken({ 
+      id: user.id, 
+      email: user.email, 
+      roles: rolesArray 
+    }, '1h');
+
+    return { token: newAccessToken };
+  } catch (error) {
+    throw new UnauthorizedError('Refresh token inválido o expirado');
+  }
 };
